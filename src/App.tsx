@@ -238,15 +238,38 @@ function GamePlay({ gameId, onBack }: { gameId: string, onBack: () => void }) {
 
 function App() {
   const [gameId, setGameId] = useState<string | null>(null)
+  const [gameMode, setGameMode] = useState<'create' | 'join'>('create')
 
-  const mutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: createGame,
   })
 
-  const [state, formAction, isPending] = useActionState(
+  const joinMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const gameId = formData.get('gameId') as string
+      // Validate the game exists by fetching its status
+      await getGameStatus(gameId)
+      return { gameId }
+    }
+  })
+
+  const [createState, createFormAction, createIsPending] = useActionState(
     async (previousState: any, formData: FormData) => {
       try {
-        const result = await mutation.mutateAsync(formData)
+        const result = await createMutation.mutateAsync(formData)
+        setGameId(result.gameId)
+        return { success: true, data: result }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+      }
+    },
+    null
+  )
+
+  const [joinState, joinFormAction, joinIsPending] = useActionState(
+    async (previousState: any, formData: FormData) => {
+      try {
+        const result = await joinMutation.mutateAsync(formData)
         setGameId(result.gameId)
         return { success: true, data: result }
       } catch (error) {
@@ -264,77 +287,137 @@ function App() {
     <div>
       <h1>Puzzle UI</h1>
       
-      <form action={formAction}>
-        <label>
-          Player UUID
-          <input type="text" name="playerId" placeholder="Enter player UUID" required />
-        </label>
-
-        <fieldset>
-          <legend>Select Scenario</legend>
-          <label>
-            <input type="radio" name="scenario" value="1" required />
-            Scenario 1
-          </label>
-          <label>
-            <input type="radio" name="scenario" value="2" />
-            Scenario 2
-          </label>
-          <label>
-            <input type="radio" name="scenario" value="3" />
-            Scenario 3
-          </label>
-        </fieldset>
-
-        <button type="submit" disabled={isPending}>
-          {isPending ? 'Creating Game...' : 'Create Game'}
+      <div style={{ marginBottom: '20px' }}>
+        <button 
+          onClick={() => setGameMode('create')} 
+          style={{ 
+            marginRight: '10px', 
+            backgroundColor: gameMode === 'create' ? '#007bff' : '#f8f9fa',
+            color: gameMode === 'create' ? 'white' : 'black'
+          }}
+        >
+          Create New Game
         </button>
-      </form>
+        <button 
+          onClick={() => setGameMode('join')}
+          style={{ 
+            backgroundColor: gameMode === 'join' ? '#007bff' : '#f8f9fa',
+            color: gameMode === 'join' ? 'white' : 'black'
+          }}
+        >
+          Join Existing Game
+        </button>
+      </div>
 
-      {state?.success && !gameId && (
+      {gameMode === 'create' && (
         <div>
-          <h2>Game Created Successfully!</h2>
-          <p><strong>Game ID:</strong> {state.data.gameId}</p>
-          
-          <h3>Constraints</h3>
-          <ul>
-            {state.data.constraints.map((constraint, index) => (
-              <li key={index}>
-                <strong>{constraint.attribute}:</strong> minimum {constraint.minCount}
-              </li>
-            ))}
-          </ul>
+          <h2>Create New Game</h2>
+          <form action={createFormAction}>
+            <label>
+              Player UUID
+              <input type="text" name="playerId" placeholder="Enter player UUID" required />
+            </label>
 
-          <h3>Attribute Statistics</h3>
-          
-          <h4>Relative Frequencies</h4>
-          <ul>
-            {Object.entries(state.data.attributeStatistics.relativeFrequencies).map(([attribute, frequency]) => (
-              <li key={attribute}>
-                <strong>{attribute}:</strong> {(frequency * 100).toFixed(2)}%
-              </li>
-            ))}
-          </ul>
+            <fieldset>
+              <legend>Select Scenario</legend>
+              <label>
+                <input type="radio" name="scenario" value="1" required />
+                Scenario 1
+              </label>
+              <label>
+                <input type="radio" name="scenario" value="2" />
+                Scenario 2
+              </label>
+              <label>
+                <input type="radio" name="scenario" value="3" />
+                Scenario 3
+              </label>
+            </fieldset>
 
-          <h4>Correlations</h4>
-          {Object.entries(state.data.attributeStatistics.correlations).map(([attribute, correlations]) => (
-            <div key={attribute}>
-              <h5>{attribute}</h5>
+            <button type="submit" disabled={createIsPending}>
+              {createIsPending ? 'Creating Game...' : 'Create Game'}
+            </button>
+          </form>
+
+          {createState?.success && !gameId && (
+            <div>
+              <h2>Game Created Successfully!</h2>
+              <p><strong>Game ID:</strong> {createState.data.gameId}</p>
+              
+              <h3>Constraints</h3>
               <ul>
-                {Object.entries(correlations).map(([correlatedAttribute, correlation]) => (
-                  <li key={correlatedAttribute}>
-                    <strong>vs {correlatedAttribute}:</strong> {correlation.toFixed(4)}
+                {createState.data.constraints.map((constraint, index) => (
+                  <li key={index}>
+                    <strong>{constraint.attribute}:</strong> minimum {constraint.minCount}
                   </li>
                 ))}
               </ul>
+
+              <h3>Attribute Statistics</h3>
+              
+              <h4>Relative Frequencies</h4>
+              <ul>
+                {Object.entries(createState.data.attributeStatistics.relativeFrequencies).map(([attribute, frequency]) => (
+                  <li key={attribute}>
+                    <strong>{attribute}:</strong> {(frequency * 100).toFixed(2)}%
+                  </li>
+                ))}
+              </ul>
+
+              <h4>Correlations</h4>
+              {Object.entries(createState.data.attributeStatistics.correlations).map(([attribute, correlations]) => (
+                <div key={attribute}>
+                  <h5>{attribute}</h5>
+                  <ul>
+                    {Object.entries(correlations).map(([correlatedAttribute, correlation]) => (
+                      <li key={correlatedAttribute}>
+                        <strong>vs {correlatedAttribute}:</strong> {correlation.toFixed(4)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+
+          {createState?.error && (
+            <div style={{ color: 'red' }}>
+              <strong>Error:</strong> {createState.error}
+            </div>
+          )}
         </div>
       )}
 
-      {state?.error && (
-        <div style={{ color: 'red' }}>
-          <strong>Error:</strong> {state.error}
+      {gameMode === 'join' && (
+        <div>
+          <h2>Join Existing Game</h2>
+          <form action={joinFormAction}>
+            <label>
+              Game UUID
+              <input 
+                type="text" 
+                name="gameId" 
+                placeholder="Enter game UUID (e.g., 2bc1db04-95a4-43a8-831f-b4543d77104d)" 
+                required 
+              />
+            </label>
+
+            <button type="submit" disabled={joinIsPending}>
+              {joinIsPending ? 'Joining Game...' : 'Join Game'}
+            </button>
+          </form>
+
+          {joinState?.success && !gameId && (
+            <div style={{ color: 'green' }}>
+              <strong>Game found! Redirecting...</strong>
+            </div>
+          )}
+
+          {joinState?.error && (
+            <div style={{ color: 'red' }}>
+              <strong>Error:</strong> {joinState.error}
+            </div>
+          )}
         </div>
       )}
     </div>
