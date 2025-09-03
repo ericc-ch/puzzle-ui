@@ -63,7 +63,7 @@ async function createGame(formData: FormData): Promise<GameResponse> {
   const scenario = formData.get('scenario') as string
   
   const response = await fetch(
-    `https://berghain.challenges.listenlabs.ai/new-game?scenario=${scenario}&playerId=${playerId}`
+    `https://cors-anywhere.com/https://berghain.challenges.listenlabs.ai/new-game?scenario=${scenario}&playerId=${playerId}`
   )
   
   if (!response.ok) {
@@ -74,7 +74,7 @@ async function createGame(formData: FormData): Promise<GameResponse> {
 }
 
 async function getGameStatus(gameId: string): Promise<GameStatusResponse> {
-  const response = await fetch(`https://berghain.challenges.listenlabs.ai/api/game/${gameId}`)
+  const response = await fetch(`https://cors-anywhere.com/https://berghain.challenges.listenlabs.ai/api/game/${gameId}`)
   
   if (!response.ok) {
     throw new Error('Failed to get game status')
@@ -84,7 +84,7 @@ async function getGameStatus(gameId: string): Promise<GameStatusResponse> {
 }
 
 async function getPersonAndDecide(gameId: string, personIndex: number, accept?: boolean): Promise<DecisionResponse> {
-  const url = new URL('https://berghain.challenges.listenlabs.ai/decide-and-next')
+  const url = new URL('https://cors-anywhere.com/https://berghain.challenges.listenlabs.ai/decide-and-next')
   url.searchParams.set('gameId', gameId)
   url.searchParams.set('personIndex', personIndex.toString())
   
@@ -109,7 +109,6 @@ function GamePlay({ gameId, onBack }: { gameId: string, onBack: () => void }) {
   const { data: gameStatus, isLoading: gameStatusLoading, error: gameStatusError } = useQuery({
     queryKey: ['gameStatus', gameId],
     queryFn: () => getGameStatus(gameId),
-    refetchInterval: 5000,
   })
 
   const { data: gameState, isLoading, error, refetch } = useQuery({
@@ -127,7 +126,7 @@ function GamePlay({ gameId, onBack }: { gameId: string, onBack: () => void }) {
       return getPersonAndDecide(gameId, currentPersonIndex, accept)
     },
     onSuccess: () => {
-      refetch()
+      queryClient.invalidateQueries({ queryKey: ['person', gameId] })
       queryClient.invalidateQueries({ queryKey: ['gameStatus', gameId] })
     }
   })
@@ -230,6 +229,15 @@ function GamePlay({ gameId, onBack }: { gameId: string, onBack: () => void }) {
       {decideMutation.isPending && <p>Making decision...</p>}
 
       <div style={{ marginTop: '20px' }}>
+        <button 
+          onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ['gameStatus', gameId] })
+            queryClient.invalidateQueries({ queryKey: ['person', gameId] })
+          }}
+          style={{ marginRight: '10px' }}
+        >
+          Refresh
+        </button>
         <button onClick={onBack}>Back to Game Setup</button>
       </div>
     </div>
